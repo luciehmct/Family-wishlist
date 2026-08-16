@@ -131,6 +131,10 @@ const ghost = `${btn} border border-neutral-300 text-neutral-700 hover:bg-neutra
 const input =
   'w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900';
 const tag = 'rounded-full px-2 py-0.5';
+
+// ponytail: the price is free text ("environ 200", "50-60"), so the currency is just a
+// label next to it — no conversion, no totals, nothing to keep in sync with a rate API.
+const CURRENCIES = ['€', '$', '£', 'CHF', 'A$'];
 const menuItem = 'block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-neutral-100';
 
 /** ponytail: <details> is a menu that closes itself — no open state, no click-outside
@@ -240,7 +244,8 @@ function GiftForm({ ownerUid, me, events, gift, onDone }) {
   const secret = ownerUid !== me;
   const [f, setF] = useState({
     title: gift?.title ?? '', url: gift?.url ?? '',
-    price: gift?.price ?? '', note: gift?.note ?? '', eventId: gift?.eventId ?? '',
+    price: gift?.price ?? '', currency: gift?.currency ?? CURRENCIES[0],
+    note: gift?.note ?? '', eventId: gift?.eventId ?? '',
   });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
@@ -266,8 +271,14 @@ function GiftForm({ ownerUid, me, events, gift, onDone }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <input className={input} type="url" placeholder="Lien (facultatif)"
           value={f.url} onChange={set('url')} />
-        <input className={input} placeholder="Prix (facultatif)"
-          value={f.price} onChange={set('price')} />
+        <div className="flex gap-2">
+          <input className={input} placeholder="Prix (facultatif)" inputMode="decimal"
+            value={f.price} onChange={set('price')} />
+          <select className={`${input} w-20`} value={f.currency} onChange={set('currency')}
+            aria-label="Devise">
+            {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
       </div>
       <input className={input} placeholder="Note — taille, couleur, modèle… (facultatif)"
         value={f.note} onChange={set('note')} />
@@ -357,7 +368,7 @@ function Gift({ gift, event, events, p, me, showBought, comments = [] }) {
               : gift.title}
           </h3>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
-            {gift.price && <span>{gift.price}</span>}
+            {gift.price && <span>{gift.price} {gift.currency ?? CURRENCIES[0]}</span>}
             {event && <span className={`${tag} bg-neutral-100`}>{event.name}</span>}
             {bought && (
               <span className={`${tag} bg-neutral-900 font-medium text-white`}>Acheté</span>
@@ -547,10 +558,10 @@ function Guests({ guests }) {
 
 const byDate = (now) => (a, b) => daysUntil(occAfter(a, now), now) - daysUntil(occAfter(b, now), now);
 
-/** Read-only countdown column on Accueil, colour-coded by whether anything is bought. */
+/** Read-only countdown column on Accueil, colour-coded by whether *I* have that one covered. */
 function Countdowns({ events, now, status }) {
   const skin = {
-    // green = something is already bought for that occasion, amber = still nothing.
+    // green = I've bought or joined a gift for that occasion, amber = I still owe one.
     done: 'border-emerald-300 bg-emerald-50',
     todo: 'border-amber-300 bg-amber-50',
     // no colour at all when the answer would be about me, or when the eye is closed:
@@ -699,7 +710,10 @@ function Dashboard({ me, gifts, purchases, comments, events, eventById, now, pri
   const status = (e) => {
     if (e.userUid === me) return 'none';
     if (privacy && !isGuest(e.userUid)) return 'none';
-    return gifts.some((g) => g.eventId === e.id && purchases.get(g.id)?.bought
+    // "Have *I* got this one covered?" — bought by me, or I'm in on it. Someone else
+    // having bought something doesn't let me off the hook, so it stays amber.
+    return gifts.some((g) => g.eventId === e.id
+      && purchases.get(g.id)?.participants?.includes(me)
       && (!privacy || isGuest(g.ownerUid))) ? 'done' : 'todo';
   };
 
