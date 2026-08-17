@@ -20,6 +20,25 @@ function AuthProvider({ children }) {
   return <AuthContext.Provider value={user}>{children}</AuthContext.Provider>;
 }
 
+/** Signs out after 30 min without a click, a key or a scroll. ponytail: an in-memory
+ *  timer — a reload resets it, and Firebase keeps the session either way. */
+function useIdleSignOut(minutes = 30) {
+  useEffect(() => {
+    let t;
+    const reset = () => {
+      clearTimeout(t);
+      t = setTimeout(() => signOut(auth), minutes * 60_000);
+    };
+    const events = ['pointerdown', 'keydown', 'scroll', 'visibilitychange'];
+    events.forEach((e) => addEventListener(e, reset, { passive: true }));
+    reset();
+    return () => {
+      clearTimeout(t);
+      events.forEach((e) => removeEventListener(e, reset));
+    };
+  }, [minutes]);
+}
+
 /* ---------------------------------------------------------------- data ---- */
 
 /** Live array from a Firestore collection or query. */
@@ -798,6 +817,7 @@ function Board({ user }) {
   const [privacy, setPrivacy] = useState(() => localStorage.getItem('privacy') === '1');
   const [theme, setTheme] = useState(loadTheme);
 
+  useIdleSignOut();
   useEffect(() => applyTheme(theme), [theme]);
 
   const items = useLive(collection(db, 'items'));
