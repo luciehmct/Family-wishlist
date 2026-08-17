@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut,
 } from 'firebase/auth';
@@ -560,6 +560,8 @@ const byDate = (now) => (a, b) => daysUntil(occAfter(a, now), now) - daysUntil(o
 
 /** Read-only countdown column on Accueil, colour-coded by whether *I* have that one covered. */
 function Countdowns({ events, now, status }) {
+  const [scrolled, setScrolled] = useState(false);
+  const box = useRef(null);
   const skin = {
     // green = I've bought or joined a gift for that occasion, amber = I still owe one.
     done: 'border-emerald-300 bg-emerald-50',
@@ -569,9 +571,14 @@ function Countdowns({ events, now, status }) {
     none: 'border-neutral-300 bg-white',
   };
 
+  const sorted = [...events].sort(byDate(now));
+
   return (
-    <ul className="space-y-3">
-      {[...events].sort(byDate(now)).map((e) => {
+    // ponytail: 27rem ≈ 5 cards. A fixed height beats measuring a card with a ResizeObserver.
+    <div className="relative">
+    <ul ref={box} onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}
+      className="max-h-[27rem] space-y-3 overflow-y-auto pr-1">
+      {sorted.map((e) => {
         const days = daysUntil(occAfter(e, now), now);
         return (
           <li key={e.id} className={`flex items-center justify-between gap-3 rounded-xl border p-4 ${skin[status(e)]}`}>
@@ -587,6 +594,14 @@ function Countdowns({ events, now, status }) {
         );
       })}
     </ul>
+    {scrolled && (
+      <button aria-label="Revenir en haut" title="Revenir en haut"
+        onClick={() => box.current.scrollTo({ top: 0, behavior: 'smooth' })}
+        className="absolute bottom-3 right-3 size-9 rounded-full border border-neutral-300 bg-white/90 shadow-md backdrop-blur hover:bg-neutral-100">
+        ↑
+      </button>
+    )}
+    </div>
   );
 }
 
@@ -840,7 +855,10 @@ function Board({ user }) {
     <div className="min-h-dvh bg-neutral-50 text-neutral-900">
       <header className="sticky top-0 z-10 border-b border-neutral-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
-          <h1 className="mr-auto font-semibold tracking-tight">Wishlist</h1>
+          <div className="mr-auto">
+            <h1 className="font-semibold tracking-tight">Wishlist</h1>
+            <p className="text-xs text-neutral-500">Coucou {me.name} :)</p>
+          </div>
           <button
             onClick={() => setPrivacy(!privacy)}
             aria-pressed={privacy}
